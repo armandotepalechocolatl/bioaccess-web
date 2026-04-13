@@ -29,9 +29,10 @@
             font-family: 'Segoe UI', Roboto, sans-serif;
             display: flex;
             background-color: var(--bg-color);
+            min-height: 100vh;
         }
 
-        /* MENÚ LATERAL */
+        /* MENÚ LATERAL (ESCRITORIO) */
         .sidebar {
             width: 260px;
             background-color: var(--sidebar-color);
@@ -42,6 +43,8 @@
             flex-direction: column;
             box-sizing: border-box;
             position: fixed;
+            z-index: 1000;
+            transition: 0.3s;
         }
 
         .logo h1 {
@@ -73,8 +76,11 @@
         /* ÁREA PRINCIPAL */
         .main-content {
             flex: 1;
-            margin-left: 260px;
+            margin-left: 260px; /* Margen para PC */
             padding: 40px;
+            transition: 0.3s;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .title-section h1 {
@@ -138,6 +144,7 @@
             padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.03);
+            overflow-x: auto; /* Permite scroll horizontal en tablas muy anchas en móvil */
         }
 
         .section-header {
@@ -145,61 +152,77 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-        }
-
-        .section-header h2 {
-            margin: 0;
-            font-size: 18px;
-            color: var(--text-dark);
-        }
-
-        .update-badge {
-            background-color: #E3F2FD;
-            color: #007BFF;
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 500px; /* Evita que la tabla se comprima demasiado */
         }
 
-        th {
-            text-align: left;
-            color: var(--text-light);
-            font-size: 13px;
-            font-weight: 600;
-            padding: 12px;
-            border-bottom: 2px solid #EEEEEE;
-        }
+        th { text-align: left; color: var(--text-light); font-size: 13px; padding: 12px; border-bottom: 2px solid #EEEEEE; }
+        td { padding: 15px 12px; color: var(--text-dark); font-size: 14px; border-bottom: 1px solid #F5F5F5; }
 
-        td {
-            padding: 15px 12px;
-            color: var(--text-dark);
-            font-size: 14px;
-            font-weight: 500;
-            border-bottom: 1px solid #F5F5F5;
-        }
-
-        /* BADGES DE ESTADO */
         .status-badge {
             padding: 6px 12px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
+            white-space: nowrap;
         }
 
-        .status-badge.concedido {
-            background-color: #E6F8EF;
-            color: #178351;
-        }
+        .status-badge.concedido { background-color: #E6F8EF; color: #178351; }
+        .status-badge.denegado { background-color: #F8E6E6; color: #A32929; }
 
-        .status-badge.denegado {
-            background-color: #F8E6E6;
-            color: #A32929;
+        /* --- RESPONSIVE / AJUSTES PARA CELULAR --- */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                padding: 10px;
+            }
+
+            .logo h1 {
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                font-size: 20px;
+            }
+
+            .nav-links {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 5px;
+            }
+
+            .nav-links a {
+                padding: 8px 12px;
+                margin-bottom: 0;
+                font-size: 13px;
+                flex: 1 1 auto;
+                text-align: center;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            .indicators-grid {
+                grid-template-columns: 1fr; /* Una tarjeta por fila en móvil */
+            }
+
+            .title-section h1 {
+                font-size: 20px;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -213,36 +236,34 @@
             <a href="index.html" class="active">Dashboard</a>
             <a href="usuarios.html">Usuarios</a>
             <a href="historial.html">Base de Datos</a>
-        </div>
-        <div style="margin-top: auto;">
-            <a href="#" onclick="cerrarSesion()" style="color: #ff4d4d; font-weight: 600; text-decoration: none; padding: 12px 15px; display: block;">🚪 Cerrar Sesión</a>
+            <a href="#" onclick="cerrarSesion()" style="color: #ff4d4d;">🚪 Salir</a>
         </div>
     </div>
 
     <div class="main-content">
         <div class="title-section">
-            <h1>Panel de Monitoreo en Tiempo Real</h1>
+            <h1>Monitoreo Real-Time</h1>
         </div>
         
         <div class="indicators-grid">
             <div class="indicator-card">
                 <div class="icon">💻</div>
                 <div class="details">
-                    <h3>Estado del Sistema</h3>
-                    <p class="value" id="stat-sistema" style="color: var(--primary-color);">En línea</p>
+                    <h3>Sistema</h3>
+                    <p class="value" id="stat-sistema" style="color: var(--primary-color);">Online</p>
                 </div>
             </div>
             <div class="indicator-card">
                 <div class="icon">📊</div>
                 <div class="details">
-                    <h3>Accesos de Hoy</h3>
-                    <p class="value" id="stat-total">--</p>
+                    <h3>Accesos Hoy</h3>
+                    <p class="value" id="stat-total">0</p>
                 </div>
             </div>
             <div class="indicator-card">
                 <div class="icon">👤</div>
                 <div class="details">
-                    <h3>Último Acceso</h3>
+                    <h3>Último</h3>
                     <p class="value" id="stat-ultimo">--</p>
                 </div>
             </div>
@@ -250,21 +271,20 @@
 
         <div class="history-section">
             <div class="section-header">
-                <h2>Últimos Registros de Acceso</h2>
-                <span class="update-badge">Actualización automática cada 5s</span>
+                <h2>Últimos Accesos</h2>
             </div>
             <table>
                 <thead>
                     <tr>
-                        <th>Huella ID</th>
-                        <th>Nombre del Usuario</th>
-                        <th>Fecha y Hora</th>
-                        <th>Estado de Acceso</th>
+                        <th>ID</th>
+                        <th>Usuario</th>
+                        <th>Hora</th>
+                        <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody id="tabla-accesos">
                     <tr>
-                        <td colspan="4" style="text-align: center; color: #999;">Cargando datos...</td>
+                        <td colspan="4" style="text-align: center; color: #999;">Cargando...</td>
                     </tr>
                 </tbody>
             </table>
@@ -284,7 +304,7 @@
                 tabla.innerHTML = ''; 
 
                 if (datos.length === 0) {
-                    tabla.innerHTML = '<tr><td colspan="4" style="text-align: center;">No hay registros aún</td></tr>';
+                    tabla.innerHTML = '<tr><td colspan="4" style="text-align: center;">Sin registros</td></tr>';
                     return;
                 }
 
@@ -292,12 +312,12 @@
                 ultimoText.innerText = datos[0].nombre.split(' ')[0]; 
 
                 datos.forEach(reg => {
-                    const fecha = new Date(reg.fecha_hora).toLocaleString();
+                    const fecha = new Date(reg.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const colorBadge = reg.estado === 'Concedido' ? 'status-badge concedido' : 'status-badge denegado';
                     
                     const fila = `
                         <tr>
-                            <td style="font-weight: 700; color: #007BFF;"># ${reg.huella_id}</td>
+                            <td style="font-weight: 700; color: #007BFF;">#${reg.huella_id}</td>
                             <td>${reg.nombre}</td>
                             <td>${fecha}</td>
                             <td><span class="${colorBadge}">${reg.estado}</span></td>
@@ -306,7 +326,7 @@
                     tabla.innerHTML += fila;
                 });
             } catch (error) {
-                console.error('Error al conectar con la API:', error);
+                console.error('Error:', error);
             }
         }
 
