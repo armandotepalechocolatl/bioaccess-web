@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioAccess - Usuarios</title>
+
+    <script>
+        if (!localStorage.getItem('bioaccess_token')) {
+            window.location.href = 'login.html';
+        }
+        function cerrarSesion() {
+            localStorage.removeItem('bioaccess_token');
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #F8F9FA;
+            --sidebar-color: #212529;
+            --primary-color: #007BFF;
+            --text-dark: #333333;
+            --text-light: #999999;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            background-color: var(--bg-color);
+        }
+
+        /* MENÚ LATERAL */
+        .sidebar {
+            width: 260px; background-color: var(--sidebar-color); color: white; height: 100vh;
+            padding: 20px; display: flex; flex-direction: column; box-sizing: border-box; position: fixed;
+        }
+        .logo h1 { font-size: 24px; margin-top: 0; margin-bottom: 40px; text-align: center; border-bottom: 1px solid #333; padding-bottom: 20px; }
+        .nav-links a { text-decoration: none; color: #CCCCCC; padding: 12px 15px; display: block; margin-bottom: 5px; border-radius: 8px; font-weight: 500; transition: 0.2s; }
+        .nav-links a:hover { color: white; }
+        .nav-links a.active { background-color: var(--primary-color); color: white; }
+
+        /* ÁREA PRINCIPAL */
+        .main-content { flex: 1; margin-left: 260px; padding: 40px; }
+        .title-section h1 { font-size: 24px; color: var(--text-dark); margin-top: 0; margin-bottom: 5px; }
+        .sub { color: var(--text-light); margin-bottom: 30px; font-weight: 500; font-size: 14px; }
+        .content-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 30px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); }
+        .card h2 { margin-top: 0; font-size: 18px; margin-bottom: 25px; color: var(--text-dark); border-bottom: 1px solid #EEE; padding-bottom: 15px; }
+
+        /* FORMULARIO */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; font-size: 13px; color: var(--text-dark); margin-bottom: 8px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #DDDDDD; border-radius: 8px; box-sizing: border-box; font-size: 14px; background-color: #FAFAFA; }
+        input:focus, select:focus { border-color: var(--primary-color); outline: none; background-color: #FFFFFF; }
+        .btn-submit { width: 100%; background-color: var(--primary-color); color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s; }
+        .btn-submit:hover { background-color: #0056b3; }
+
+        /* TABLA SCROLLABLE */
+        .table-wrapper {
+            max-height: 320px; /* Altura máxima antes de activar el scroll */
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        /* Personalización de la barra de scroll */
+        .table-wrapper::-webkit-scrollbar { width: 6px; }
+        .table-wrapper::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .table-wrapper::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        .table-wrapper::-webkit-scrollbar-thumb:hover { background: #999; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { 
+            text-align: left; color: var(--text-light); font-size: 13px; font-weight: 600; 
+            padding: 12px; border-bottom: 2px solid #EEEEEE; 
+            position: sticky; top: 0; background: white; /* Congela el encabezado */
+        }
+        td { padding: 15px 12px; color: var(--text-dark); font-size: 14px; font-weight: 500; border-bottom: 1px solid #F5F5F5; }
+        .depto-badge { background-color: #F0F4F8; color: #555; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        
+        /* Botón borrar simplificado como en tu imagen */
+        .btn-delete { background-color: #fff; color: #ff4d4d; border: 1px solid #ff4d4d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; }
+        .btn-delete:hover { background-color: #ff4d4d; color: white; }
+
+        /* MODALES COMUNES */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 350px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .modal-content h3 { margin-top: 0; font-size: 20px;}
+        .modal-content p { color: #555; font-size: 14px; margin-bottom: 25px; line-height: 1.5;}
+        .modal-buttons { display: flex; justify-content: center; gap: 15px; }
+        .btn-cancel { background-color: #E0E0E0; color: #333; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-cancel:hover { background-color: #ccc; }
+        .btn-danger { background-color: #ff4d4d; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-danger:hover { background-color: #cc0000; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="logo">
+            <h1>BioAccess</h1>
+        </div>
+        <div class="nav-links">
+            <a href="index.html">Dashboard</a>
+            <a href="usuarios.html" class="active">Usuarios</a>
+            <a href="historial.html">Base de Datos</a>
+        </div>
+        <div style="margin-top: auto;">
+            <a href="#" onclick="cerrarSesion()" style="color: #ff4d4d; font-weight: 600; text-decoration: none; padding: 12px 15px; display: block;">🚪 Cerrar Sesión</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="title-section">
+            <h1>Gestión de Usuarios</h1>
+            <p class="sub">Registra y administra las huellas activas en el sistema</p>
+        </div>
+
+        <div class="content-grid">
+            <div class="card">
+                <h2>Registrar Nuevo Usuario</h2>
+                <form id="form-registro">
+                    <div class="form-group">
+                        <label>Nombre Completo</label>
+                        <input type="text" id="nombre" placeholder="Ej. Armando Tepale" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Departamento</label>
+                        <select id="departamento">
+                            <option value="DR">DR</option>
+                            <option value="DQA">DQA</option>
+                            <option value="SQA">SQA</option>
+                            <option value="IOP">IOP</option>
+                            <option value="Electrical">Electrical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>ID de Huella (Asignar número)</label>
+                        <input type="number" id="huella_id" placeholder="Ej: 1, 2, 3..." required>
+                    </div>
+                    <button type="submit" class="btn-submit">Guardar y Enrolar</button>
+                </form>
+            </div>
+
+            <div class="card">
+              <h2>Historial de Registros (Últimos 10)</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Huella ID</th>
+                                <th>Nombre</th>
+                                <th>Depto.</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lista-usuarios">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-eliminar" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="color: #333;">⚠️ Confirmar Baja</h3>
+            <p>¿Estás seguro de que deseas eliminar al usuario <strong id="nombre-eliminar"></strong>? Su historial y acceso serán borrados.</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn-danger" onclick="confirmarEliminar()">Sí, Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-alerta" class="modal-overlay" style="z-index: 1001;">
+        <div class="modal-content">
+            <h3 id="alerta-titulo">Aviso</h3>
+            <p id="alerta-mensaje">...</p>
+            <button class="btn-submit" onclick="cerrarAlerta()" style="margin-top: 10px;">Entendido</button>
+        </div>
+    </div>
+
+    <script>
+        let idParaBorrar = null;
+
+        // --- SISTEMA DE ALERTAS BONITAS ---
+        function mostrarAlerta(titulo, mensaje, esError = false) {
+            document.getElementById('alerta-titulo').innerText = titulo;
+            document.getElementById('alerta-titulo').style.color = esError ? '#ff4d4d' : '#178351';
+            document.getElementById('alerta-mensaje').innerText = mensaje;
+            document.getElementById('modal-alerta').style.display = 'flex';
+        }
+
+        function cerrarAlerta() {
+            document.getElementById('modal-alerta').style.display = 'none';
+        }
+
+        // --- CARGAR USUARIOS ---
+        async function obtenerUsuarios() {
+            try {
+                const res = await fetch('/api/lista-usuarios');
+                const usuarios = await res.json();
+                const tabla = document.getElementById('lista-usuarios');
+                tabla.innerHTML = '';
+                
+                usuarios.forEach(u => {
+                    tabla.innerHTML += `
+                        <tr>
+                            <td style="font-weight: 700; color: #007BFF;"># ${u.huella_id}</td>
+                            <td>${u.nombre}</td>
+                            <td><span class="depto-badge">${u.departamento}</span></td>
+                            <td>
+                                <button class="btn-delete" onclick="abrirModal(${u.huella_id}, '${u.nombre}')">Borrar</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (error) {
+                console.error("Error al cargar usuarios:", error);
+            }
+        }
+
+        // --- ELIMINAR USUARIO ---
+        function abrirModal(id, nombre) {
+            idParaBorrar = id;
+            document.getElementById('nombre-eliminar').innerText = nombre;
+            document.getElementById('modal-eliminar').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            document.getElementById('modal-eliminar').style.display = 'none';
+            idParaBorrar = null;
+        }
+
+        async function confirmarEliminar() {
+            if (idParaBorrar === null) return;
+
+            try {
+                const res = await fetch(`/api/eliminar-usuario/${idParaBorrar}`, { method: 'DELETE' });
+
+                if (res.ok) {
+                    cerrarModal();
+                    mostrarAlerta('✅ ¡Eliminado!', 'El usuario ha sido dado de baja correctamente.');
+                    obtenerUsuarios();
+                } else {
+                    cerrarModal();
+                    mostrarAlerta('❌ Error', 'Hubo un problema al borrar en la base de datos.', true);
+                }
+            } catch (error) {
+                cerrarModal();
+                mostrarAlerta('❌ Error de Conexión', 'No se pudo conectar con el servidor.', true);
+            }
+        }
+
+        // --- REGISTRAR USUARIO ---
+        document.getElementById('form-registro').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const datos = {
+                nombre: document.getElementById('nombre').value,
+                departamento: document.getElementById('departamento').value,
+                huella_id: document.getElementById('huella_id').value
+            };
+
+            const res = await fetch('/api/registrar-usuario', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            });
+
+            if (res.ok) {
+                document.getElementById('form-registro').reset();
+                mostrarAlerta('✅ ¡Éxito!', 'El usuario ha sido enrolado correctamente en el sistema.');
+                obtenerUsuarios();
+            } else {
+                mostrarAlerta('❌ Error', 'Ese ID de huella probablemente ya existe.', true);
+            }
+        });
+
+        obtenerUsuarios();
+    </script>
+</body>
+</html>

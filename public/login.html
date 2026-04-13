@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioAccess - Iniciar Sesión</title>
+    <style>
+        body {
+            margin: 0; font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: #F8F9FA; display: flex; align-items: center;
+            justify-content: center; height: 100vh;
+        }
+        .login-card {
+            background: white; padding: 40px; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 350px; text-align: center;
+        }
+        .login-card h1 { color: #212529; margin-top: 0; font-size: 28px; }
+        .login-card p { color: #999; margin-bottom: 30px; font-size: 14px; }
+        .form-group { text-align: left; margin-bottom: 20px; }
+        label { display: block; font-weight: 600; font-size: 13px; color: #333; margin-bottom: 8px; }
+        input {
+            width: 100%; padding: 12px; border: 1px solid #DDD; border-radius: 8px;
+            box-sizing: border-box; font-size: 14px; background-color: #FAFAFA;
+        }
+        input:focus { border-color: #007BFF; outline: none; background-color: #FFF; }
+        .btn-submit {
+            width: 100%; background-color: #007BFF; color: white; border: none;
+            padding: 14px; border-radius: 8px; font-weight: 700; font-size: 14px;
+            cursor: pointer; transition: 0.2s; margin-top: 10px;
+        }
+        .btn-submit:hover { background-color: #0056b3; }
+        #error-msg { color: #ff4d4d; font-size: 13px; font-weight: bold; display: none; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <h1>BioAccess</h1>
+        <p>Panel de Administración Seguro</p>
+
+        <form id="form-login">
+            <div class="form-group">
+                <label>Número de Empleado</label>
+                <input type="number" id="usuario" placeholder="Ej. 108365" required>
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-submit">Ingresar al Sistema</button>
+            <p id="error-msg">❌ Credenciales incorrectas</p>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('form-login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const usuario = document.getElementById('usuario').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuario, password })
+            });
+
+            const datos = await res.json();
+
+            if (res.ok && datos.success) {
+                localStorage.setItem('bioaccess_token', datos.token);
+                window.location.href = 'index.html';
+            } else {
+                document.getElementById('error-msg').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
