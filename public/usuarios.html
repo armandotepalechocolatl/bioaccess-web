@@ -32,7 +32,7 @@
             min-height: 100vh;
         }
 
-        /* MENÚ LATERAL (ESCRITORIO) */
+        /* --- SIDEBAR (PC) --- */
         .sidebar {
             width: 260px;
             background-color: var(--sidebar-color);
@@ -72,7 +72,7 @@
             color: white;
         }
 
-        /* ÁREA PRINCIPAL */
+        /* --- ÁREA PRINCIPAL --- */
         .main-content {
             flex: 1;
             margin-left: 260px;
@@ -84,6 +84,7 @@
         .title-section h1 { font-size: 24px; color: var(--text-dark); margin: 0; }
         .sub { color: var(--text-light); margin-bottom: 30px; font-size: 14px; }
 
+        /* GRID PRINCIPAL */
         .content-grid {
             display: grid;
             grid-template-columns: 1fr 1.5fr;
@@ -130,14 +131,14 @@
             cursor: pointer;
         }
 
-        /* TABLA SCROLLABLE */
+        /* TABLA */
         .table-wrapper {
             max-height: 400px;
             overflow-y: auto;
             overflow-x: auto;
         }
 
-        table { width: 100%; border-collapse: collapse; min-width: 450px; }
+        table { width: 100%; border-collapse: collapse; min-width: 400px; }
         th { text-align: left; color: var(--text-light); font-size: 13px; padding: 12px; border-bottom: 2px solid #EEEEEE; position: sticky; top: 0; background: white; }
         td { padding: 15px 12px; font-size: 14px; border-bottom: 1px solid #F5F5F5; }
         
@@ -151,20 +152,58 @@
         }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 350px; text-align: center; }
 
-        /* --- RESPONSIVE / MÓVIL --- */
+        /* --- CORRECCIONES PARA MÓVIL (PANTALLAS < 768px) --- */
         @media (max-width: 768px) {
             body { flex-direction: column; }
+            
             .sidebar {
                 width: 100%;
                 height: auto;
                 position: relative;
-                padding: 10px;
+                padding: 15px 10px;
+                flex-direction: column;
+                align-items: center;
             }
-            .logo h1 { margin-bottom: 10px; padding-bottom: 10px; font-size: 20px; }
-            .nav-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-            .nav-links a { padding: 8px 12px; font-size: 13px; margin-bottom: 0; }
-            .main-content { margin-left: 0; padding: 20px; }
-            .content-grid { grid-template-columns: 1fr; }
+
+            .logo h1 {
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                font-size: 20px;
+                border-bottom: 1px solid #333;
+                width: 100%;
+            }
+
+            .nav-links {
+                display: flex;
+                flex-direction: row; /* Menú horizontal en móvil */
+                justify-content: space-around;
+                width: 100%;
+                gap: 5px;
+            }
+
+            .nav-links a {
+                padding: 10px 5px;
+                font-size: 12px; /* Texto más pequeño para que quepa */
+                margin-bottom: 0;
+                flex: 1;
+                text-align: center;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 15px; /* Menos espacio en los bordes */
+            }
+
+            .content-grid {
+                grid-template-columns: 1fr; /* Una sola columna: Formulario arriba, Tabla abajo */
+                gap: 20px;
+            }
+
+            .card {
+                padding: 15px;
+            }
+
+            .title-section h1 { font-size: 20px; }
         }
     </style>
 </head>
@@ -175,10 +214,10 @@
             <h1>BioAccess</h1>
         </div>
         <div class="nav-links">
-            <a href="index.html">Dashboard</a>
+            <a href="index.html">Dash</a>
             <a href="usuarios.html" class="active">Usuarios</a>
-            <a href="historial.html">Base de Datos</a>
-            <a href="#" onclick="cerrarSesion()" style="color: #ff4d4d;">🚪 Salir</a>
+            <a href="historial.html">Datos</a>
+            <a href="#" onclick="cerrarSesion()" style="color: #ff4d4d;">Salir</a>
         </div>
     </div>
 
@@ -215,19 +254,18 @@
             </div>
 
             <div class="card">
-                <h2>Historial de Registros (Últimos 10)</h2>
+                <h2>Historial de Registros</h2>
                 <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
-                                <th>Depto.</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="lista-usuarios">
-                            <tr><td colspan="4" style="text-align: center;">Cargando...</td></tr>
+                            <tr><td colspan="3" style="text-align: center;">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -240,8 +278,8 @@
             <h3>⚠️ Confirmar Baja</h3>
             <p>¿Eliminar al usuario <strong id="nombre-eliminar"></strong>?</p>
             <div style="display: flex; gap: 10px; justify-content: center;">
-                <button onclick="cerrarModal()" style="padding: 10px 20px; border-radius: 8px; border: none; background: #eee; cursor: pointer;">Cancelar</button>
-                <button onclick="confirmarEliminar()" style="padding: 10px 20px; border-radius: 8px; border: none; background: #ff4d4d; color: white; cursor: pointer;">Eliminar</button>
+                <button onclick="cerrarModal()" style="padding: 10px 20px; border-radius: 8px; border: none; background: #eee; cursor: pointer;">No</button>
+                <button onclick="confirmarEliminar()" style="padding: 10px 20px; border-radius: 8px; border: none; background: #ff4d4d; color: white; cursor: pointer;">Sí</button>
             </div>
         </div>
     </div>
@@ -277,7 +315,6 @@
                         <tr>
                             <td style="font-weight: 700; color: #007BFF;">#${u.huella_id}</td>
                             <td>${u.nombre}</td>
-                            <td><span class="depto-badge">${u.departamento}</span></td>
                             <td><button class="btn-delete" onclick="abrirModal(${u.huella_id}, '${u.nombre}')">Borrar</button></td>
                         </tr>
                     `;
