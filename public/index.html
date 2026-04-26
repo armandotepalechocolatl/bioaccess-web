@@ -144,7 +144,7 @@
             padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.03);
-            overflow-x: auto; /* Permite scroll horizontal en tablas muy anchas en móvil */
+            overflow-x: auto;
         }
 
         .section-header {
@@ -159,7 +159,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 500px; /* Evita que la tabla se comprima demasiado */
+            min-width: 500px; 
         }
 
         th { text-align: left; color: var(--text-light); font-size: 13px; padding: 12px; border-bottom: 2px solid #EEEEEE; }
@@ -216,7 +216,7 @@
             }
 
             .indicators-grid {
-                grid-template-columns: 1fr; /* Una tarjeta por fila en móvil */
+                grid-template-columns: 1fr;
             }
 
             .title-section h1 {
@@ -294,11 +294,14 @@
     <script>
         async function cargarHistorial() {
             try {
-                // 1. Obtenemos el tiempo actual en milisegundos
-                const tiempoActual = new Date().getTime();
+                // 1. Testigo visual en consola para confirmar que el ciclo está vivo
+                console.log("⏱️ " + new Date().toLocaleTimeString() + " - Buscando nuevos accesos...");
                 
-                // 2. Inyectamos la variable tiempoActual en la URL
-                const respuesta = await fetch(`/api/historial?t=${tiempoActual}`);
+                // 2. Generador de URL única para forzar bypass de caché
+                const antiCache = new Date().getTime() + "-" + Math.random();
+                const respuesta = await fetch(`/api/historial?x=${antiCache}`);
+                
+                if (!respuesta.ok) throw new Error("Error HTTP " + respuesta.status);
                 
                 const datos = await respuesta.json();
                 
@@ -306,16 +309,20 @@
                 const totalText = document.getElementById('stat-total');
                 const ultimoText = document.getElementById('stat-ultimo');
                 
+                // 3. Limpieza de tabla
                 tabla.innerHTML = ''; 
 
+                // Si no hay datos
                 if (datos.length === 0) {
                     tabla.innerHTML = '<tr><td colspan="4" style="text-align: center;">Sin registros</td></tr>';
                     return;
                 }
 
+                // 4. Actualizar contadores superiores
                 totalText.innerText = datos.length;
                 ultimoText.innerText = datos[0].nombre.split(' ')[0]; 
 
+                // 5. Renderizar filas
                 datos.forEach(reg => {
                     const fecha = new Date(reg.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const colorBadge = reg.estado === 'Concedido' ? 'status-badge concedido' : 'status-badge denegado';
@@ -331,10 +338,11 @@
                     tabla.innerHTML += fila;
                 });
             } catch (error) {
-                console.error('Error:', error);
+                console.error('❌ Error de conexión al cargar historial:', error);
             }
         }
 
+        // Ejecutar inmediatamente al abrir y luego cada 5 segundos exactos
         cargarHistorial();
         setInterval(cargarHistorial, 5000);
     </script>
