@@ -294,7 +294,14 @@
     <script>
         async function cargarHistorial() {
             try {
-                const respuesta = await fetch('/api/historial');
+                const respuesta = await fetch('/api/historial', {
+                method: 'GET',
+                headers: {
+                'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 const datos = await respuesta.json();
                 
                 const tabla = document.getElementById('tabla-accesos');
