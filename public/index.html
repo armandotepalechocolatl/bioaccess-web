@@ -301,21 +301,17 @@
         statSistema.style.color = "var(--primary-color)";
 
         // 3. Función inicial de carga
+       // 3. Función inicial de carga (Versión Blindada a prueba de fallos)
         async function cargarDatosIniciales() {
-            try {
-                // Pedimos el historial de la tabla y el conteo real en paralelo
-                const [resHistorial, resHoy] = await Promise.all([
-                    fetch('/api/historial'),
-                    fetch('/api/accesos-hoy')
-                ]);
+            const tabla = document.getElementById('tabla-accesos');
+            const statSistema = document.getElementById('stat-sistema');
 
+            try {
+                // --- FASE 1: CARGAR LA TABLA (CRÍTICO) ---
+                const resHistorial = await fetch('/api/historial');
+                if (!resHistorial.ok) throw new Error("Fallo al obtener historial");
+                
                 const datosHistorial = await resHistorial.json();
-                const datosHoy = await resHoy.json();
-                
-                const tabla = document.getElementById('tabla-accesos');
-                
-                // Asignamos el valor real a "Accesos Hoy"
-                document.getElementById('stat-total').innerText = datosHoy.total;
                 
                 if (datosHistorial.length > 0) {
                     document.getElementById('stat-ultimo').innerText = datosHistorial[0].nombre.split(' ')[0]; 
@@ -324,13 +320,27 @@
                 tabla.innerHTML = ''; 
                 if (datosHistorial.length === 0) {
                     tabla.innerHTML = '<tr><td colspan="4" style="text-align: center;">Sin registros</td></tr>';
-                    return;
+                } else {
+                    datosHistorial.forEach(reg => agregarFilaATabla(reg, false));
                 }
 
-                datosHistorial.forEach(reg => agregarFilaATabla(reg, false));
+                // --- FASE 2: CARGAR CONTADOR DE HOY (SECUNDARIO) ---
+                try {
+                    const resHoy = await fetch('/api/accesos-hoy');
+                    if (resHoy.ok) {
+                        const datosHoy = await resHoy.json();
+                        document.getElementById('stat-total').innerText = datosHoy.total;
+                    } else {
+                        console.warn("⚠️ La ruta del contador aún no está lista en el servidor.");
+                    }
+                } catch (errHoy) {
+                    console.error("⚠️ Error silencioso en el contador:", errHoy);
+                }
+
             } catch (error) {
-                console.error('❌ Error de carga inicial:', error);
-                statSistema.innerText = "Error de Conexión";
+                console.error('❌ Error fatal de carga:', error);
+                tabla.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff4d4d;">Error de conexión con el servidor</td></tr>';
+                statSistema.innerText = "Desconectado";
                 statSistema.style.color = "#ff4d4d";
             }
         }
