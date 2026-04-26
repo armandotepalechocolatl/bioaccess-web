@@ -45,13 +45,43 @@
             border-radius: 8px; font-weight: bold; cursor: pointer; height: 40px; transition: 0.2s; flex-grow: 0;
         }
 
-        /* TABLA */
-        .history-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); max-height: 60vh; overflow-y: auto; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        /* --- CORRECCIÓN DE LA TABLA Y EL SCROLL --- */
+        .history-section { 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.03); 
+            /* Se quitó el overflow de aquí para evitar el bug del padding */
+        }
         
-        /* --- AQUÍ ESTÁ EL BLINDAJE VISUAL (z-index: 10) --- */
-        th { text-align: left; color: var(--text-light); font-size: 13px; font-weight: 600; padding: 12px; border-bottom: 2px solid #EEEEEE; position: sticky; top: 0; background: white; z-index: 10; }
-        td { padding: 15px 12px; color: var(--text-dark); font-size: 14px; border-bottom: 1px solid #F5F5F5; }
+        .table-container {
+            max-height: 55vh; 
+            overflow-y: auto; 
+            overflow-x: auto;
+            /* Aquí vive el scroll ahora, sin padding que lo estorbe */
+        }
+
+        table { 
+            width: 100%; 
+            /* Se cambió a 'separate' para que funcione perfecto con sticky */
+            border-collapse: separate; 
+            border-spacing: 0;
+            min-width: 600px; 
+        }
+        
+        th { 
+            text-align: left; color: var(--text-light); font-size: 13px; font-weight: 600; 
+            padding: 12px; 
+            position: sticky; top: 0; 
+            background: white; 
+            z-index: 10; 
+            border-bottom: 2px solid #EEEEEE; 
+        }
+        
+        td { 
+            padding: 15px 12px; color: var(--text-dark); font-size: 14px; 
+            border-bottom: 1px solid #F5F5F5; 
+        }
         
         .depto-badge { background-color: #F0F4F8; color: #555; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
         .status-badge { padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; }
@@ -121,21 +151,23 @@
         </div>
 
         <div class="history-section">
-            <table id="tabla-export">
-                <thead>
-                    <tr>
-                        <th>N°</th>
-                        <th>Huella ID</th>
-                        <th>Empleado</th>
-                        <th>Depto</th>
-                        <th>Fecha y Hora</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody id="tabla-completa">
-                    <tr><td colspan="6" style="text-align: center; color: #999;">Cargando historial...</td></tr>
-                </tbody>
-            </table>
+            <div class="table-container">
+                <table id="tabla-export">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Huella ID</th>
+                            <th>Empleado</th>
+                            <th>Depto</th>
+                            <th>Fecha y Hora</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-completa">
+                        <tr><td colspan="6" style="text-align: center; color: #999;">Cargando historial...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -150,7 +182,7 @@
                     headers: { 'Cache-Control': 'no-cache' }
                 });
                 baseDeDatosGlobal = await respuesta.json();
-                aplicarFiltros(); // Si estabas buscando a alguien, no se borra la búsqueda al actualizar
+                aplicarFiltros(); 
             } catch (error) { 
                 console.error('Error al cargar base de datos:', error); 
             }
@@ -213,7 +245,7 @@
 
         // --- ACTUALIZACIÓN AL INSTANTE DESDE EL ESP32 ---
         socket.on('nuevo_acceso', () => {
-            // Cuando alguien toca el protoboard, bajamos la tabla de nuevo para obtener el N° y el Depto.
+            // Cuando alguien toca el protoboard, bajamos la tabla de nuevo para obtener los datos frescos.
             cargarHistorialCompleto();
         });
 
