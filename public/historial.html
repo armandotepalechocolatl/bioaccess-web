@@ -48,7 +48,9 @@
         /* TABLA */
         .history-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.03); max-height: 60vh; overflow-y: auto; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; min-width: 600px; }
-        th { text-align: left; color: var(--text-light); font-size: 13px; font-weight: 600; padding: 12px; border-bottom: 2px solid #EEEEEE; position: sticky; top: 0; background: white;}
+        
+        /* --- AQUÍ ESTÁ EL BLINDAJE VISUAL (z-index: 10) --- */
+        th { text-align: left; color: var(--text-light); font-size: 13px; font-weight: 600; padding: 12px; border-bottom: 2px solid #EEEEEE; position: sticky; top: 0; background: white; z-index: 10; }
         td { padding: 15px 12px; color: var(--text-dark); font-size: 14px; border-bottom: 1px solid #F5F5F5; }
         
         .depto-badge { background-color: #F0F4F8; color: #555; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
@@ -69,6 +71,7 @@
             .btn-clear { width: 100%; margin-top: 10px; }
         }
     </style>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -137,14 +140,20 @@
     </div>
 
     <script>
+        // --- CONEXIÓN EN TIEMPO REAL ---
+        const socket = io({ transports: ['websocket', 'polling'] });
         let baseDeDatosGlobal = [];
 
         async function cargarHistorialCompleto() {
             try {
-                const respuesta = await fetch('/api/historial-completo');
+                const respuesta = await fetch('/api/historial-completo', {
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
                 baseDeDatosGlobal = await respuesta.json();
-                aplicarFiltros();
-            } catch (error) { console.error('Error:', error); }
+                aplicarFiltros(); // Si estabas buscando a alguien, no se borra la búsqueda al actualizar
+            } catch (error) { 
+                console.error('Error al cargar base de datos:', error); 
+            }
         }
 
         function aplicarFiltros() {
@@ -167,10 +176,12 @@
         function renderizarTabla(datos) {
             const tabla = document.getElementById('tabla-completa');
             tabla.innerHTML = ''; 
+            
             if (datos.length === 0) {
                 tabla.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Sin resultados.</td></tr>';
                 return;
             }
+            
             datos.forEach(reg => {
                 const fecha = new Date(reg.fecha_hora).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
                 const colorBadge = reg.estado === 'Concedido' ? 'status-badge concedido' : 'status-badge denegado';
@@ -200,6 +211,13 @@
         document.getElementById('filtro-estado').addEventListener('change', aplicarFiltros);
         document.getElementById('filtro-fecha').addEventListener('change', aplicarFiltros);
 
+        // --- ACTUALIZACIÓN AL INSTANTE DESDE EL ESP32 ---
+        socket.on('nuevo_acceso', () => {
+            // Cuando alguien toca el protoboard, bajamos la tabla de nuevo para obtener el N° y el Depto.
+            cargarHistorialCompleto();
+        });
+
+        // Arranque inicial
         cargarHistorialCompleto();
     </script>
 </body>
