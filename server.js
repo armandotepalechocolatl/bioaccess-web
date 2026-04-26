@@ -129,6 +129,29 @@ app.get('/api/historial-completo', async (req, res) => {
     }
 });
 
+// 7. RUTA PARA REGISTRAR ACCESOS DESDE EL ESP32
+app.post('/api/registrar-acceso', async (req, res) => {
+    // 1. Extraemos los datos que mandó el ESP32
+    const { huella_id, nombre, estado } = req.body;
+    
+    try {
+        // 2. Insertamos el registro en la tabla de PostgreSQL
+        await pool.query(
+            'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
+            [huella_id, nombre, estado]
+        );
+        
+        console.log(`✅ Acceso registrado desde el ESP32 para: ${nombre}`);
+        
+        // 3. Respondemos al ESP32 con un 200 OK para confirmar la entrega
+        res.status(200).json({ mensaje: "Acceso registrado correctamente" });
+        
+    } catch (err) {
+        console.error("❌ Error al guardar el acceso:", err.message);
+        res.status(500).json({ error: "Error interno en la base de datos" });
+    }
+});
+
 // Conectar a la base de datos y encender el servidor UNA SOLA VEZ
 pool.connect()
     .then(() => {
