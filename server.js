@@ -1,8 +1,19 @@
 const express = require('express');
 const { Pool } = require('pg');
-const app = express();
+const http = require('http'); // <-- REQUERIDO PARA WEBSOCKETS
+const { Server } = require('socket.io'); // <-- REQUERIDO PARA WEBSOCKETS
 
-// Usamos el puerto que asigne el entorno o el 3000 por defecto
+const app = express();
+const server = http.createServer(app); // <-- ENVOLVEMOS EXPRESS
+
+// CONFIGURACIÓN DE SEGURIDAD (CORS) PARA RENDER
+const io = new Server(server, {
+    cors: {
+        origin: "*", 
+        methods: ["GET", "POST"]
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Configuración de la conexión a AWS RDS
@@ -12,7 +23,6 @@ const pool = new Pool({
     database: 'bioaccess',
     password: 'AdminBio123',
     port: 5432,
-    // ESTO ES LO QUE FALTA PARA AWS:
     ssl: {
         rejectUnauthorized: false
     }
@@ -20,6 +30,11 @@ const pool = new Pool({
 
 app.use(express.static('public'));
 app.use(express.json());
+
+// Testigo de conexión en consola del servidor
+io.on('connection', (socket) => {
+    console.log('🟢 [WebSocket] Un navegador se ha conectado al Dashboard');
+});
 
 // 1. RUTA PARA REGISTRAR USUARIOS
 app.post('/api/registrar-usuario', async (req, res) => {
@@ -40,7 +55,6 @@ app.post('/api/registrar-usuario', async (req, res) => {
 // 2. RUTA PARA LISTAR USUARIOS
 app.get('/api/lista-usuarios', async (req, res) => {
     try {
-        // Seleccionamos los últimos 10 ordenados por su ID de creación de forma descendente
         const resultado = await pool.query('SELECT * FROM usuarios ORDER BY id_usuario DESC LIMIT 10');
         res.json(resultado.rows);
     } catch (err) {
@@ -48,14 +62,22 @@ app.get('/api/lista-usuarios', async (req, res) => {
     }
 });
 
+// 3. RUTA PARA EL HISTORIAL INICIAL
+app.get('/api/historial', async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT * FROM registros_acceso ORDER BY fecha_hora DESC LIMIT 10');
+        res.json(resultado.rows); 
+    } catch (err) {
+        console.error("❌ Error DB:", err.message);
+        res.status(500).json({ error: "Error al consultar la base de datos" });
+    }
+});
+
 // 4. RUTA PARA ELIMINAR USUARIOS
 app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     const id = req.params.id;
     try {
-        // Paso 1: Eliminar el historial de accesos de este usuario para que Postgres no bloquee el borrado
         await pool.query('DELETE FROM registros_acceso WHERE huella_id = $1', [id]);
-        
-        // Paso 2: Ahora sí, eliminar al usuario de la tabla principal
         const resultado = await pool.query('DELETE FROM usuarios WHERE huella_id = $1', [id]);
 
         if (resultado.rowCount > 0) {
@@ -70,31 +92,11 @@ app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     }
 });
 
-// 3. RUTA PARA EL HISTORIAL (DASHBOARD) - VERSIÓN ANTI-CACHÉ
-app.get('/api/historial', async (req, res) => {
-    try {
-        // --- LA SOLUCIÓN: ÓRDENES ESTRICTAS PARA NO USAR CACHÉ ---
-        res.setHeader('Surrogate-Control', 'no-store');
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-
-        const resultado = await pool.query('SELECT * FROM registros_acceso ORDER BY fecha_hora DESC LIMIT 10');
-        res.json(resultado.rows); 
-    } catch (err) {
-        console.error("❌ Error al consultar historial en AWS:", err.message);
-        res.status(500).json({ error: "Error al consultar la base de datos" });
-    }
-});
-
-// 5. RUTA PARA LOGIN (Validando desde la Base de Datos AWS)
+// 5. RUTA PARA LOGIN 
 app.post('/api/login', async (req, res) => {
     const { usuario, password } = req.body;
-    
     try {
-        // Convertimos el usuario (texto) a número entero para que coincida con la base de datos
         const id_numero = parseInt(usuario, 10);
-
         const resultado = await pool.query(
             'SELECT * FROM administradores WHERE id_empleado = $1 AND password = $2', 
             [id_numero, password]
@@ -111,10 +113,9 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 6. RUTA PARA EL HISTORIAL COMPLETO (Con Departamentos)
+// 6. RUTA PARA EL HISTORIAL COMPLETO
 app.get('/api/historial-completo', async (req, res) => {
     try {
-        // Hacemos un JOIN para combinar el registro de acceso con el departamento del usuario
         const query = `
             SELECT 
                 r.id_registro, 
@@ -135,41 +136,42 @@ app.get('/api/historial-completo', async (req, res) => {
     }
 });
 
-// 7. RUTA PARA REGISTRAR ACCESOS DESDE EL ESP32
+// 7. RUTA PARA REGISTRAR ACCESOS DESDE EL ESP32 (¡AQUÍ SUCEDE LA MAGIA EN TIEMPO REAL!)
 app.post('/api/registrar-acceso', async (req, res) => {
-    // 1. Extraemos los datos que mandó el ESP32
     const { huella_id, nombre, estado } = req.body;
-    
     try {
-        // 2. Insertamos el registro en la tabla de PostgreSQL
+        // Guardamos en AWS
         await pool.query(
             'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
             [huella_id, nombre, estado]
         );
-        
         console.log(`✅ Acceso registrado desde el ESP32 para: ${nombre}`);
         
-        // 3. Respondemos al ESP32 con un 200 OK para confirmar la entrega
-        res.status(200).json({ mensaje: "Acceso registrado correctamente" });
+        // EMITIMOS EL EVENTO WEBSOCKET A TODOS LOS NAVEGADORES
+        io.emit('nuevo_acceso', { 
+            huella_id, 
+            nombre, 
+            estado, 
+            fecha_hora: new Date() 
+        });
         
+        // Confirmamos al ESP32
+        res.status(200).json({ mensaje: "Acceso registrado correctamente" });
     } catch (err) {
         console.error("❌ Error al guardar el acceso:", err.message);
         res.status(500).json({ error: "Error interno en la base de datos" });
     }
 });
 
-// ---8. NUEVA RUTA: CONTADOR REAL DE ACCESOS DE HOY ---
+// 8. RUTA: CONTADOR REAL DE ACCESOS DE HOY
 app.get('/api/accesos-hoy', async (req, res) => {
     try {
-        // Usamos la zona horaria de Tijuana para que el conteo no se reinicie a las 5 PM (UTC)
         const query = `
             SELECT COUNT(*) 
             FROM registros_acceso 
             WHERE DATE(fecha_hora AT TIME ZONE 'UTC' AT TIME ZONE 'America/Tijuana') = DATE(CURRENT_TIMESTAMP AT TIME ZONE 'America/Tijuana')
         `;
         const resultado = await pool.query(query);
-        
-        // Devolvemos el número exacto
         res.json({ total: parseInt(resultado.rows[0].count, 10) });
     } catch (err) {
         console.error("❌ Error al contar accesos de hoy:", err);
@@ -177,12 +179,13 @@ app.get('/api/accesos-hoy', async (req, res) => {
     }
 });
 
-// Conectar a la base de datos y encender el servidor UNA SOLA VEZ
+// --- INICIO DEL SERVIDOR ---
 pool.connect()
     .then(() => {
         console.log('✅ Conexión exitosa a AWS RDS');
-        app.listen(PORT, () => {
-            console.log(`🌐 Servidor BioAccess activo en puerto ${PORT}`);
+        // AHORA USAMOS server.listen EN LUGAR DE app.listen
+        server.listen(PORT, () => {
+            console.log(`🌐 Servidor BioAccess y WebSockets activos en puerto ${PORT}`);
         });
     })
     .catch(err => console.error('❌ Error fatal al conectar a la DB:', err.message));
