@@ -294,14 +294,12 @@
     <script>
         async function cargarHistorial() {
             try {
-                const respuesta = await fetch('/api/historial', {
-                method: 'GET',
-                headers: {
-                'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
+                // 1. Obtenemos el tiempo actual en milisegundos
+                const tiempoActual = new Date().getTime();
+                
+                // 2. Inyectamos la variable tiempoActual en la URL
+                const respuesta = await fetch(`/api/historial?t=${tiempoActual}`);
+                
                 const datos = await respuesta.json();
                 
                 const tabla = document.getElementById('tabla-accesos');
