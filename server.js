@@ -70,9 +70,15 @@ app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     }
 });
 
-// 3. RUTA PARA EL HISTORIAL (DASHBOARD)
+// 3. RUTA PARA EL HISTORIAL (DASHBOARD) - VERSIÓN ANTI-CACHÉ
 app.get('/api/historial', async (req, res) => {
     try {
+        // --- LA SOLUCIÓN: ÓRDENES ESTRICTAS PARA NO USAR CACHÉ ---
+        res.setHeader('Surrogate-Control', 'no-store');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
         const resultado = await pool.query('SELECT * FROM registros_acceso ORDER BY fecha_hora DESC LIMIT 10');
         res.json(resultado.rows); 
     } catch (err) {
