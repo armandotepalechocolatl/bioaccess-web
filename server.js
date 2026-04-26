@@ -158,6 +158,25 @@ app.post('/api/registrar-acceso', async (req, res) => {
     }
 });
 
+// ---8. NUEVA RUTA: CONTADOR REAL DE ACCESOS DE HOY ---
+app.get('/api/accesos-hoy', async (req, res) => {
+    try {
+        // Usamos la zona horaria de Tijuana para que el conteo no se reinicie a las 5 PM (UTC)
+        const query = `
+            SELECT COUNT(*) 
+            FROM registros_acceso 
+            WHERE DATE(fecha_hora AT TIME ZONE 'UTC' AT TIME ZONE 'America/Tijuana') = DATE(CURRENT_TIMESTAMP AT TIME ZONE 'America/Tijuana')
+        `;
+        const resultado = await pool.query(query);
+        
+        // Devolvemos el número exacto
+        res.json({ total: parseInt(resultado.rows[0].count, 10) });
+    } catch (err) {
+        console.error("❌ Error al contar accesos de hoy:", err);
+        res.status(500).json({ error: "Error en la base de datos" });
+    }
+});
+
 // Conectar a la base de datos y encender el servidor UNA SOLA VEZ
 pool.connect()
     .then(() => {
