@@ -225,6 +225,7 @@
             }
         }
     </style>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -300,8 +301,7 @@
         statSistema.innerText = "Online";
         statSistema.style.color = "var(--primary-color)";
 
-        // 3. Función inicial de carga
-       // 3. Función inicial de carga (Versión Blindada a prueba de fallos)
+        // 3. Función inicial de carga (Versión Blindada a prueba de fallos)
         async function cargarDatosIniciales() {
             const tabla = document.getElementById('tabla-accesos');
             const statSistema = document.getElementById('stat-sistema');
