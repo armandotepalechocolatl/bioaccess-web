@@ -291,60 +291,76 @@
         </div>
     </div>
 
-    <script>
+   <script>
         async function cargarHistorial() {
+            const statSistema = document.getElementById('stat-sistema');
+            
             try {
-                // 1. Testigo visual en consola para confirmar que el ciclo está vivo
-                console.log("⏱️ " + new Date().toLocaleTimeString() + " - Buscando nuevos accesos...");
+                // 1. Indicador visual de que estamos yendo al servidor
+                statSistema.innerText = "Actualizando...";
+                statSistema.style.color = "#ffc107"; // Amarillo de proceso
+
+                // 2. Fetch estricto sin caché
+                const respuesta = await fetch('/api/historial', {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
                 
-                // 2. Generador de URL única para forzar bypass de caché
-                const antiCache = new Date().getTime() + "-" + Math.random();
-                const respuesta = await fetch(`/api/historial?x=${antiCache}`);
-                
-                if (!respuesta.ok) throw new Error("Error HTTP " + respuesta.status);
-                
+                if (!respuesta.ok) throw new Error("Error en el servidor");
                 const datos = await respuesta.json();
                 
                 const tabla = document.getElementById('tabla-accesos');
                 const totalText = document.getElementById('stat-total');
                 const ultimoText = document.getElementById('stat-ultimo');
                 
-                // 3. Limpieza de tabla
+                // 3. Limpiamos tabla
                 tabla.innerHTML = ''; 
 
-                // Si no hay datos
                 if (datos.length === 0) {
                     tabla.innerHTML = '<tr><td colspan="4" style="text-align: center;">Sin registros</td></tr>';
-                    return;
+                } else {
+                    // 4. Actualizamos datos
+                    totalText.innerText = datos.length;
+                    ultimoText.innerText = datos[0].nombre.split(' ')[0]; 
+
+                    // 5. Dibujamos la tabla con los datos frescos
+                    datos.forEach(reg => {
+                        const fecha = new Date(reg.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const colorBadge = reg.estado === 'Concedido' ? 'status-badge concedido' : 'status-badge denegado';
+                        
+                        const fila = `
+                            <tr>
+                                <td style="font-weight: 700; color: #007BFF;">#${reg.huella_id}</td>
+                                <td>${reg.nombre}</td>
+                                <td>${fecha}</td>
+                                <td><span class="${colorBadge}">${reg.estado}</span></td>
+                            </tr>
+                        `;
+                        tabla.innerHTML += fila;
+                    });
                 }
 
-                // 4. Actualizar contadores superiores
-                totalText.innerText = datos.length;
-                ultimoText.innerText = datos[0].nombre.split(' ')[0]; 
+                // 6. Indicador de éxito
+                statSistema.innerText = "Online";
+                statSistema.style.color = "var(--primary-color)"; // Azul de éxito
 
-                // 5. Renderizar filas
-                datos.forEach(reg => {
-                    const fecha = new Date(reg.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const colorBadge = reg.estado === 'Concedido' ? 'status-badge concedido' : 'status-badge denegado';
-                    
-                    const fila = `
-                        <tr>
-                            <td style="font-weight: 700; color: #007BFF;">#${reg.huella_id}</td>
-                            <td>${reg.nombre}</td>
-                            <td>${fecha}</td>
-                            <td><span class="${colorBadge}">${reg.estado}</span></td>
-                        </tr>
-                    `;
-                    tabla.innerHTML += fila;
-                });
             } catch (error) {
-                console.error('❌ Error de conexión al cargar historial:', error);
+                console.error('❌ Error:', error);
+                statSistema.innerText = "Desconectado";
+                statSistema.style.color = "#ff4d4d"; // Rojo de error
+            } finally {
+                // 7. EL TRUCO MAESTRO: Llamarse a sí misma solo cuando ya terminó todo.
+                // Reduje el tiempo a 3 segundos (3000 ms) para que se sienta más en tiempo real.
+                setTimeout(cargarHistorial, 3000);
             }
         }
 
-        // Ejecutar inmediatamente al abrir y luego cada 5 segundos exactos
+        // Arrancar el motor la primera vez
         cargarHistorial();
-        setInterval(cargarHistorial, 5000);
     </script>
 
 </body>
