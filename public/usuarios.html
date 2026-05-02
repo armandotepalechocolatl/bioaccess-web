@@ -167,6 +167,7 @@
         .escaner-laser {
             width: 100%; height: 6px; background: #00FF00; box-shadow: 0 0 15px 5px rgba(0, 255, 0, 0.5);
             position: absolute; top: 0; animation: scan 1.5s infinite alternate ease-in-out;
+            transition: background 0.3s, box-shadow 0.3s; /* Transición suave para los colores */
         }
         @keyframes scan {
             0% { top: 0; }
@@ -282,7 +283,7 @@
         <div class="huella-icono">
             <div class="escaner-laser"></div>
         </div>
-        <h2 id="texto-escaner">Coloque su dedo en el sensor...</h2>
+        <h2 id="texto-escaner">Esperando conexión con el escáner...</h2>
         <p>Mantenga el dedo firme para el registro físico.</p>
     </div>
 
@@ -346,8 +347,10 @@
 
             // 1. Iniciar Animación
             document.getElementById('modal-escaner').style.display = 'flex';
-            document.getElementById('texto-escaner').innerText = "Coloque su dedo en el sensor...";
+            document.getElementById('texto-escaner').innerText = "Esperando conexión con el escáner...";
             document.getElementById('texto-escaner').style.color = "white";
+            document.querySelector('.escaner-laser').style.background = "#00FF00";
+            document.querySelector('.escaner-laser').style.boxShadow = "0 0 15px 5px rgba(0, 255, 0, 0.5)";
 
             // 2. Guardar en Base de Datos (AWS) primero
             const resBD = await fetch('/api/registrar-usuario', {
@@ -370,10 +373,33 @@
             }
         });
 
+        // --- PUENTE DE COMUNICACIÓN EN VIVO DESDE ESP32 ---
+        socket.on('actualizacion_pantalla', (mensaje) => {
+            const textoEscaner = document.getElementById('texto-escaner');
+            textoEscaner.innerText = mensaje;
+            
+            // Cambiamos colores según la instrucción para guiar visualmente
+            if (mensaje.includes("QUITE")) {
+                textoEscaner.style.color = "#FFC107"; // Amarillo de alerta
+                document.querySelector('.escaner-laser').style.background = "#FFC107";
+                document.querySelector('.escaner-laser').style.boxShadow = "0 0 15px 5px rgba(255, 193, 7, 0.5)";
+            } else if (mensaje.includes("Vuelva a colocar")) {
+                textoEscaner.style.color = "#00FFFF"; // Cyan para la segunda lectura
+                document.querySelector('.escaner-laser').style.background = "#00FFFF";
+                document.querySelector('.escaner-laser').style.boxShadow = "0 0 15px 5px rgba(0, 255, 255, 0.5)";
+            } else {
+                textoEscaner.style.color = "white"; // Normal
+                document.querySelector('.escaner-laser').style.background = "#00FF00";
+                document.querySelector('.escaner-laser').style.boxShadow = "0 0 15px 5px rgba(0, 255, 0, 0.5)";
+            }
+        });
+
         // 4. Escuchar cuando el ESP32 termina de grabar físicamente la huella
         socket.on('enrolamiento_completado', () => {
             document.getElementById('texto-escaner').innerText = "✅ ¡Huella grabada con éxito!";
             document.getElementById('texto-escaner').style.color = "#00FF00";
+            document.querySelector('.escaner-laser').style.background = "#00FF00";
+            document.querySelector('.escaner-laser').style.boxShadow = "0 0 15px 5px rgba(0, 255, 0, 0.5)";
             
             // Ocultar modal, limpiar formulario y recargar tabla de usuarios
             setTimeout(() => {
