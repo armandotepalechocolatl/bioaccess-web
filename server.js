@@ -36,20 +36,65 @@ io.on('connection', (socket) => {
     console.log('🟢 [WebSocket] Un navegador se ha conectado al Dashboard');
 });
 
-// 1. RUTA PARA REGISTRAR USUARIOS
-app.post('/api/registrar-usuario', async (req, res) => {
-    const { nombre, departamento, huella_id } = req.body;
+// --- VARIABLES GLOBALES PARA EL MODO ENROLAMIENTO ---
+let modo_sensor = "LEER"; // Puede ser "LEER" o "ENROLAR"
+let id_a_enrolar = null;
+
+// --- 1. RUTA: REGISTRAR ACCESOS (AHORA ES DINÁMICA) ---
+app.post('/api/registrar-acceso', async (req, res) => {
+    const { huella_id, estado } = req.body; // El ESP32 ya no manda el nombre
     try {
+        let nombre_real = "Desconocido";
+
+        // Si el estado es Concedido, buscamos quién es el dueño de ese ID en AWS
+        if (estado === "Concedido") {
+            const user = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
+            if (user.rows.length > 0) {
+                nombre_real = user.rows[0].nombre;
+            } else {
+                nombre_real = "Usuario sin registrar";
+            }
+        }
+
+        // Guardamos el historial con el nombre real de la base de datos
         await pool.query(
-            'INSERT INTO usuarios (nombre, departamento, huella_id) VALUES ($1, $2, $3)', 
-            [nombre, departamento, huella_id]
+            'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
+            [huella_id, nombre_real, estado]
         );
-        console.log(`✅ Usuario ${nombre} guardado en AWS.`);
-        res.status(200).json({ mensaje: 'Usuario guardado' });
+        console.log(`✅ Acceso ${estado}: ${nombre_real} (ID Sensor: ${huella_id})`);
+        
+        // Disparamos el WebSocket a la página web
+        io.emit('nuevo_acceso', { huella_id, nombre: nombre_real, estado, fecha_hora: new Date() });
+        res.status(200).json({ mensaje: "Acceso registrado" });
     } catch (err) {
-        console.error("❌ Error en INSERT:", err.message);
-        res.status(500).json({ error: err.message });
+        console.error("❌ Error DB:", err.message);
+        res.status(500).json({ error: "Error en la base de datos" });
     }
+});
+
+// --- 2. RUTAS PARA EL ENROLAMIENTO (COMUNICACIÓN WEB <-> ESP32) ---
+
+// La página web llama a esta ruta cuando presionas "Guardar y Enrolar"
+app.post('/api/iniciar-enrolamiento', (req, res) => {
+    const { id_sensor } = req.body;
+    modo_sensor = "ENROLAR";
+    id_a_enrolar = id_sensor;
+    console.log(`⚠️ MODO ENROLAMIENTO ACTIVADO para el ID: ${id_sensor}`);
+    res.status(200).json({ mensaje: "Esperando huella en el sensor..." });
+});
+
+// El ESP32 estará preguntando a esta ruta cada 2 segundos "¿Qué hago?"
+app.get('/api/estado-sensor', (req, res) => {
+    res.json({ modo: modo_sensor, id: id_a_enrolar });
+});
+
+// El ESP32 avisa a esta ruta cuando terminó de escanear la huella nueva
+app.post('/api/exito-enrolamiento', (req, res) => {
+    console.log("✅ ESP32 confirma que la huella fue grabada físicamente.");
+    modo_sensor = "LEER"; // Regresamos el sistema a la normalidad
+    id_a_enrolar = null;
+    io.emit('enrolamiento_completado'); // Le avisa a la animación de tu web que ya acabó
+    res.status(200).json({ mensaje: "Modo lectura restaurado" });
 });
 
 // 2. RUTA PARA LISTAR USUARIOS
