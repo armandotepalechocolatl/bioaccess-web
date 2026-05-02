@@ -40,13 +40,39 @@ io.on('connection', (socket) => {
 let modo_sensor = "LEER"; // Puede ser "LEER" o "ENROLAR"
 let id_a_enrolar = null;
 
-// --- 1. RUTA: REGISTRAR ACCESOS (AHORA ES DINÁMICA) ---
+// --- 1. RUTA: REGISTRAR NUEVO USUARIO EN AWS ---
+app.post('/api/registrar-usuario', async (req, res) => {
+    const { nombre, departamento, huella_id } = req.body;
+    
+    console.log(`\n▶️ Intentando registrar usuario: ${nombre} | Depto: ${departamento} | ID: ${huella_id}`);
+
+    try {
+        const verificacion = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
+        if (verificacion.rows.length > 0) {
+            console.log(`⚠️ Rechazado: El ID ${huella_id} ya le pertenece a ${verificacion.rows[0].nombre}`);
+            return res.status(400).json({ error: 'El ID ya está en uso' });
+        }
+
+        await pool.query(
+            'INSERT INTO usuarios (huella_id, nombre, departamento) VALUES ($1, $2, $3)',
+            [huella_id, nombre, departamento]
+        );
+        
+        console.log(`✅ ÉXITO: Usuario ${nombre} guardado en BD. Esperando huella física...`);
+        res.status(200).json({ mensaje: 'Usuario guardado en base de datos' });
+
+    } catch (err) {
+        console.error("❌ ERROR CRÍTICO SQL AL REGISTRAR:", err.message);
+        res.status(500).json({ error: 'Error interno de la base de datos' });
+    }
+});
+
+// --- 2. RUTA: REGISTRAR ACCESOS (DINÁMICA DESDE EL ESP32) ---
 app.post('/api/registrar-acceso', async (req, res) => {
-    const { huella_id, estado } = req.body; // El ESP32 ya no manda el nombre
+    const { huella_id, estado } = req.body; 
     try {
         let nombre_real = "Desconocido";
 
-        // Si el estado es Concedido, buscamos quién es el dueño de ese ID en AWS
         if (estado === "Concedido") {
             const user = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
             if (user.rows.length > 0) {
@@ -56,14 +82,12 @@ app.post('/api/registrar-acceso', async (req, res) => {
             }
         }
 
-        // Guardamos el historial con el nombre real de la base de datos
         await pool.query(
             'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
             [huella_id, nombre_real, estado]
         );
         console.log(`✅ Acceso ${estado}: ${nombre_real} (ID Sensor: ${huella_id})`);
         
-        // Disparamos el WebSocket a la página web
         io.emit('nuevo_acceso', { huella_id, nombre: nombre_real, estado, fecha_hora: new Date() });
         res.status(200).json({ mensaje: "Acceso registrado" });
     } catch (err) {
@@ -72,9 +96,7 @@ app.post('/api/registrar-acceso', async (req, res) => {
     }
 });
 
-// --- 2. RUTAS PARA EL ENROLAMIENTO (COMUNICACIÓN WEB <-> ESP32) ---
-
-// La página web llama a esta ruta cuando presionas "Guardar y Enrolar"
+// --- 3. RUTAS PARA EL ENROLAMIENTO (COMUNICACIÓN WEB <-> ESP32) ---
 app.post('/api/iniciar-enrolamiento', (req, res) => {
     const { id_sensor } = req.body;
     modo_sensor = "ENROLAR";
@@ -83,21 +105,19 @@ app.post('/api/iniciar-enrolamiento', (req, res) => {
     res.status(200).json({ mensaje: "Esperando huella en el sensor..." });
 });
 
-// El ESP32 estará preguntando a esta ruta cada 2 segundos "¿Qué hago?"
 app.get('/api/estado-sensor', (req, res) => {
     res.json({ modo: modo_sensor, id: id_a_enrolar });
 });
 
-// El ESP32 avisa a esta ruta cuando terminó de escanear la huella nueva
 app.post('/api/exito-enrolamiento', (req, res) => {
     console.log("✅ ESP32 confirma que la huella fue grabada físicamente.");
-    modo_sensor = "LEER"; // Regresamos el sistema a la normalidad
+    modo_sensor = "LEER"; 
     id_a_enrolar = null;
-    io.emit('enrolamiento_completado'); // Le avisa a la animación de tu web que ya acabó
+    io.emit('enrolamiento_completado'); 
     res.status(200).json({ mensaje: "Modo lectura restaurado" });
 });
 
-// 2. RUTA PARA LISTAR USUARIOS
+// --- 4. RUTA PARA LISTAR USUARIOS ---
 app.get('/api/lista-usuarios', async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM usuarios ORDER BY id_usuario DESC LIMIT 10');
@@ -107,7 +127,7 @@ app.get('/api/lista-usuarios', async (req, res) => {
     }
 });
 
-// 3. RUTA PARA EL HISTORIAL INICIAL
+// --- 5. RUTA PARA EL HISTORIAL INICIAL ---
 app.get('/api/historial', async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM registros_acceso ORDER BY fecha_hora DESC LIMIT 10');
@@ -118,7 +138,7 @@ app.get('/api/historial', async (req, res) => {
     }
 });
 
-// 4. RUTA PARA ELIMINAR USUARIOS
+// --- 6. RUTA PARA ELIMINAR USUARIOS ---
 app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     const id = req.params.id;
     try {
@@ -137,7 +157,7 @@ app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     }
 });
 
-// 5. RUTA PARA LOGIN 
+// --- 7. RUTA PARA LOGIN ---
 app.post('/api/login', async (req, res) => {
     const { usuario, password } = req.body;
     try {
@@ -158,7 +178,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 6. RUTA PARA EL HISTORIAL COMPLETO
+// --- 8. RUTA PARA EL HISTORIAL COMPLETO ---
 app.get('/api/historial-completo', async (req, res) => {
     try {
         const query = `
@@ -181,34 +201,7 @@ app.get('/api/historial-completo', async (req, res) => {
     }
 });
 
-// 7. RUTA PARA REGISTRAR ACCESOS DESDE EL ESP32 (¡AQUÍ SUCEDE LA MAGIA EN TIEMPO REAL!)
-app.post('/api/registrar-acceso', async (req, res) => {
-    const { huella_id, nombre, estado } = req.body;
-    try {
-        // Guardamos en AWS
-        await pool.query(
-            'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
-            [huella_id, nombre, estado]
-        );
-        console.log(`✅ Acceso registrado desde el ESP32 para: ${nombre}`);
-        
-        // EMITIMOS EL EVENTO WEBSOCKET A TODOS LOS NAVEGADORES
-        io.emit('nuevo_acceso', { 
-            huella_id, 
-            nombre, 
-            estado, 
-            fecha_hora: new Date() 
-        });
-        
-        // Confirmamos al ESP32
-        res.status(200).json({ mensaje: "Acceso registrado correctamente" });
-    } catch (err) {
-        console.error("❌ Error al guardar el acceso:", err.message);
-        res.status(500).json({ error: "Error interno en la base de datos" });
-    }
-});
-
-// 8. RUTA: CONTADOR REAL DE ACCESOS DE HOY
+// --- 9. RUTA: CONTADOR REAL DE ACCESOS DE HOY ---
 app.get('/api/accesos-hoy', async (req, res) => {
     try {
         const query = `
@@ -228,7 +221,6 @@ app.get('/api/accesos-hoy', async (req, res) => {
 pool.connect()
     .then(() => {
         console.log('✅ Conexión exitosa a AWS RDS');
-        // AHORA USAMOS server.listen EN LUGAR DE app.listen
         server.listen(PORT, () => {
             console.log(`🌐 Servidor BioAccess y WebSockets activos en puerto ${PORT}`);
         });
