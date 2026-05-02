@@ -1,17 +1,14 @@
 const express = require('express');
 const { Pool } = require('pg');
-const http = require('http'); // <-- REQUERIDO PARA WEBSOCKETS
-const { Server } = require('socket.io'); // <-- REQUERIDO PARA WEBSOCKETS
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
-const server = http.createServer(app); // <-- ENVOLVEMOS EXPRESS
+const server = http.createServer(app);
 
 // CONFIGURACIÓN DE SEGURIDAD (CORS) PARA RENDER
 const io = new Server(server, {
-    cors: {
-        origin: "*", 
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -23,33 +20,29 @@ const pool = new Pool({
     database: 'bioaccess',
     password: 'AdminBio123',
     port: 5432,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: { rejectUnauthorized: false }
 });
 
 app.use(express.static('public'));
 app.use(express.json());
 
-// Testigo de conexión en consola del servidor
 io.on('connection', (socket) => {
     console.log('🟢 [WebSocket] Un navegador se ha conectado al Dashboard');
 });
 
 // --- VARIABLES GLOBALES PARA EL MODO ENROLAMIENTO ---
-let modo_sensor = "LEER"; // Puede ser "LEER" o "ENROLAR"
+let modo_sensor = "LEER";
 let id_a_enrolar = null;
 
 // --- 1. RUTA: REGISTRAR NUEVO USUARIO EN AWS ---
 app.post('/api/registrar-usuario', async (req, res) => {
     const { nombre, departamento, huella_id } = req.body;
-    
     console.log(`\n▶️ Intentando registrar usuario: ${nombre} | Depto: ${departamento} | ID: ${huella_id}`);
 
     try {
         const verificacion = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
         if (verificacion.rows.length > 0) {
-            console.log(`⚠️ Rechazado: El ID ${huella_id} ya le pertenece a ${verificacion.rows[0].nombre}`);
+            console.log(`⚠️ Rechazado: El ID ${huella_id} ya está en uso.`);
             return res.status(400).json({ error: 'El ID ya está en uso' });
         }
 
@@ -57,10 +50,8 @@ app.post('/api/registrar-usuario', async (req, res) => {
             'INSERT INTO usuarios (huella_id, nombre, departamento) VALUES ($1, $2, $3)',
             [huella_id, nombre, departamento]
         );
-        
-        console.log(`✅ ÉXITO: Usuario ${nombre} guardado en BD. Esperando huella física...`);
+        console.log(`✅ ÉXITO: Usuario guardado en BD. Esperando huella física...`);
         res.status(200).json({ mensaje: 'Usuario guardado en base de datos' });
-
     } catch (err) {
         console.error("❌ ERROR CRÍTICO SQL AL REGISTRAR:", err.message);
         res.status(500).json({ error: 'Error interno de la base de datos' });
@@ -72,21 +63,17 @@ app.post('/api/registrar-acceso', async (req, res) => {
     const { huella_id, estado } = req.body; 
     try {
         let nombre_real = "Desconocido";
-
         if (estado === "Concedido") {
             const user = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
-            if (user.rows.length > 0) {
-                nombre_real = user.rows[0].nombre;
-            } else {
-                nombre_real = "Usuario sin registrar";
-            }
+            if (user.rows.length > 0) nombre_real = user.rows[0].nombre;
+            else nombre_real = "Usuario sin registrar";
         }
 
         await pool.query(
             'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
             [huella_id, nombre_real, estado]
         );
-        console.log(`✅ Acceso ${estado}: ${nombre_real} (ID Sensor: ${huella_id})`);
+        console.log(`✅ Acceso ${estado}: ${nombre_real} (ID: ${huella_id})`);
         
         io.emit('nuevo_acceso', { huella_id, nombre: nombre_real, estado, fecha_hora: new Date() });
         res.status(200).json({ mensaje: "Acceso registrado" });
@@ -96,17 +83,24 @@ app.post('/api/registrar-acceso', async (req, res) => {
     }
 });
 
-// --- 3. RUTAS PARA EL ENROLAMIENTO (COMUNICACIÓN WEB <-> ESP32) ---
+// --- 3. RUTAS PARA EL ENROLAMIENTO (WEB <-> ESP32) ---
 app.post('/api/iniciar-enrolamiento', (req, res) => {
     const { id_sensor } = req.body;
     modo_sensor = "ENROLAR";
     id_a_enrolar = id_sensor;
-    console.log(`⚠️ MODO ENROLAMIENTO ACTIVADO para el ID: ${id_sensor}`);
+    console.log(`⚠️ MODO ENROLAMIENTO ACTIVADO para ID: ${id_sensor}`);
     res.status(200).json({ mensaje: "Esperando huella en el sensor..." });
 });
 
 app.get('/api/estado-sensor', (req, res) => {
     res.json({ modo: modo_sensor, id: id_a_enrolar });
+});
+
+// NUEVA RUTA: Puente para actualizar los textos de la página en tiempo real
+app.post('/api/progreso', (req, res) => {
+    const { mensaje } = req.body;
+    io.emit('actualizacion_pantalla', mensaje);
+    res.status(200).send("OK");
 });
 
 app.post('/api/exito-enrolamiento', (req, res) => {
@@ -122,20 +116,15 @@ app.get('/api/lista-usuarios', async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM usuarios ORDER BY id_usuario DESC LIMIT 10');
         res.json(resultado.rows);
-    } catch (err) {
-        res.status(500).json({ error: "Error al obtener usuarios" });
-    }
+    } catch (err) { res.status(500).json({ error: "Error al obtener usuarios" }); }
 });
 
-// --- 5. RUTA PARA EL HISTORIAL INICIAL ---
+// --- 5. RUTA PARA HISTORIAL INICIAL ---
 app.get('/api/historial', async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM registros_acceso ORDER BY fecha_hora DESC LIMIT 10');
         res.json(resultado.rows); 
-    } catch (err) {
-        console.error("❌ Error DB:", err.message);
-        res.status(500).json({ error: "Error al consultar la base de datos" });
-    }
+    } catch (err) { res.status(500).json({ error: "Error DB" }); }
 });
 
 // --- 6. RUTA PARA ELIMINAR USUARIOS ---
@@ -144,17 +133,9 @@ app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM registros_acceso WHERE huella_id = $1', [id]);
         const resultado = await pool.query('DELETE FROM usuarios WHERE huella_id = $1', [id]);
-
-        if (resultado.rowCount > 0) {
-            console.log(`🗑️ Usuario con ID ${id} eliminado correctamente.`);
-            res.status(200).json({ mensaje: 'Usuario eliminado' });
-        } else {
-            res.status(404).json({ error: "Usuario no encontrado" });
-        }
-    } catch (err) {
-        console.error("❌ Error al eliminar:", err.message);
-        res.status(500).json({ error: "Error interno al eliminar" });
-    }
+        if (resultado.rowCount > 0) res.status(200).json({ mensaje: 'Usuario eliminado' });
+        else res.status(404).json({ error: "Usuario no encontrado" });
+    } catch (err) { res.status(500).json({ error: "Error interno" }); }
 });
 
 // --- 7. RUTA PARA LOGIN ---
@@ -166,63 +147,30 @@ app.post('/api/login', async (req, res) => {
             'SELECT * FROM administradores WHERE id_empleado = $1 AND password = $2', 
             [id_numero, password]
         );
-
-        if (resultado.rows.length > 0) {
-            res.status(200).json({ success: true, token: 'bioaccess-auth-token-xyz' });
-        } else {
-            res.status(401).json({ success: false, message: 'Usuario o contraseña incorrectos' });
-        }
-    } catch (err) {
-        console.error("❌ Error en el inicio de sesión:", err.message);
-        res.status(500).json({ success: false, message: 'Error interno del servidor' });
-    }
+        if (resultado.rows.length > 0) res.status(200).json({ success: true, token: 'bioaccess-auth-token-xyz' });
+        else res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
+    } catch (err) { res.status(500).json({ success: false, message: 'Error interno' }); }
 });
 
-// --- 8. RUTA PARA EL HISTORIAL COMPLETO ---
+// --- 8. HISTORIAL COMPLETO ---
 app.get('/api/historial-completo', async (req, res) => {
     try {
-        const query = `
-            SELECT 
-                r.id_registro, 
-                r.huella_id, 
-                r.nombre, 
-                COALESCE(u.departamento, 'N/A') AS departamento, 
-                r.fecha_hora, 
-                r.estado
-            FROM registros_acceso r
-            LEFT JOIN usuarios u ON r.huella_id = u.huella_id
-            ORDER BY r.fecha_hora DESC
-        `;
+        const query = `SELECT r.id_registro, r.huella_id, r.nombre, COALESCE(u.departamento, 'N/A') AS departamento, r.fecha_hora, r.estado FROM registros_acceso r LEFT JOIN usuarios u ON r.huella_id = u.huella_id ORDER BY r.fecha_hora DESC`;
         const resultado = await pool.query(query);
         res.json(resultado.rows); 
-    } catch (err) {
-        console.error("Error al obtener historial:", err);
-        res.status(500).json({ error: "Error al consultar la base de datos" });
-    }
+    } catch (err) { res.status(500).json({ error: "Error DB" }); }
 });
 
-// --- 9. RUTA: CONTADOR REAL DE ACCESOS DE HOY ---
+// --- 9. CONTADOR ACCESOS HOY ---
 app.get('/api/accesos-hoy', async (req, res) => {
     try {
-        const query = `
-            SELECT COUNT(*) 
-            FROM registros_acceso 
-            WHERE DATE(fecha_hora AT TIME ZONE 'UTC' AT TIME ZONE 'America/Tijuana') = DATE(CURRENT_TIMESTAMP AT TIME ZONE 'America/Tijuana')
-        `;
+        const query = `SELECT COUNT(*) FROM registros_acceso WHERE DATE(fecha_hora AT TIME ZONE 'UTC' AT TIME ZONE 'America/Tijuana') = DATE(CURRENT_TIMESTAMP AT TIME ZONE 'America/Tijuana')`;
         const resultado = await pool.query(query);
         res.json({ total: parseInt(resultado.rows[0].count, 10) });
-    } catch (err) {
-        console.error("❌ Error al contar accesos de hoy:", err);
-        res.status(500).json({ error: "Error en la base de datos" });
-    }
+    } catch (err) { res.status(500).json({ error: "Error DB" }); }
 });
 
-// --- INICIO DEL SERVIDOR ---
-pool.connect()
-    .then(() => {
-        console.log('✅ Conexión exitosa a AWS RDS');
-        server.listen(PORT, () => {
-            console.log(`🌐 Servidor BioAccess y WebSockets activos en puerto ${PORT}`);
-        });
-    })
-    .catch(err => console.error('❌ Error fatal al conectar a la DB:', err.message));
+pool.connect().then(() => {
+    console.log('✅ Conexión exitosa a AWS RDS');
+    server.listen(PORT, () => { console.log(`🌐 Servidor BioAccess activo en puerto ${PORT}`); });
+}).catch(err => console.error('❌ Error DB:', err.message));
