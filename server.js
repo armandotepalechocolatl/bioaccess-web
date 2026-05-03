@@ -30,9 +30,10 @@ io.on('connection', (socket) => {
     console.log('🟢 [WebSocket] Un navegador se ha conectado al Dashboard');
 });
 
-// --- VARIABLES GLOBALES PARA EL MODO ENROLAMIENTO ---
+// --- VARIABLES GLOBALES ---
 let modo_sensor = "LEER";
 let id_a_enrolar = null;
+let ids_para_eliminar_fisicamente = []; // 🗑️ Cola de tareas de borrado para el ESP32
 
 // --- 1. RUTA: REGISTRAR NUEVO USUARIO EN AWS ---
 app.post('/api/registrar-usuario', async (req, res) => {
@@ -58,24 +59,31 @@ app.post('/api/registrar-usuario', async (req, res) => {
     }
 });
 
-// --- 2. RUTA: REGISTRAR ACCESOS (DINÁMICA DESDE EL ESP32) ---
+// --- 2. RUTA: REGISTRAR ACCESOS CON FILTRO ANTI-FANTASMAS ---
 app.post('/api/registrar-acceso', async (req, res) => {
     const { huella_id, estado } = req.body; 
     try {
         let nombre_real = "Desconocido";
+        let estado_final = estado;
+
+        // Doble validación: Si el sensor dice Concedido, verificamos que siga en la BD
         if (estado === "Concedido") {
             const user = await pool.query('SELECT nombre FROM usuarios WHERE huella_id = $1', [huella_id]);
-            if (user.rows.length > 0) nombre_real = user.rows[0].nombre;
-            else nombre_real = "Usuario sin registrar";
+            if (user.rows.length > 0) {
+                nombre_real = user.rows[0].nombre;
+            } else {
+                nombre_real = "Usuario Dado de Baja";
+                estado_final = "Denegado"; // Bloqueamos al fantasma
+            }
         }
 
         await pool.query(
             'INSERT INTO registros_acceso (huella_id, nombre, estado) VALUES ($1, $2, $3)',
-            [huella_id, nombre_real, estado]
+            [huella_id, nombre_real, estado_final]
         );
-        console.log(`✅ Acceso ${estado}: ${nombre_real} (ID: ${huella_id})`);
+        console.log(`✅ Acceso ${estado_final}: ${nombre_real} (ID: ${huella_id})`);
         
-        io.emit('nuevo_acceso', { huella_id, nombre: nombre_real, estado, fecha_hora: new Date() });
+        io.emit('nuevo_acceso', { huella_id, nombre: nombre_real, estado: estado_final, fecha_hora: new Date() });
         res.status(200).json({ mensaje: "Acceso registrado" });
     } catch (err) {
         console.error("❌ Error DB:", err.message);
@@ -83,7 +91,7 @@ app.post('/api/registrar-acceso', async (req, res) => {
     }
 });
 
-// --- 3. RUTAS PARA EL ENROLAMIENTO (WEB <-> ESP32) ---
+// --- 3. RUTAS PARA EL ENROLAMIENTO Y ESTADO ---
 app.post('/api/iniciar-enrolamiento', (req, res) => {
     const { id_sensor } = req.body;
     modo_sensor = "ENROLAR";
@@ -92,11 +100,17 @@ app.post('/api/iniciar-enrolamiento', (req, res) => {
     res.status(200).json({ mensaje: "Esperando huella en el sensor..." });
 });
 
+// Aquí el ESP32 pregunta qué debe hacer. Le pasamos los borrados pendientes primero.
 app.get('/api/estado-sensor', (req, res) => {
-    res.json({ modo: modo_sensor, id: id_a_enrolar });
+    if (ids_para_eliminar_fisicamente.length > 0) {
+        const id_borrar = ids_para_eliminar_fisicamente.shift(); // Saca el ID de la cola
+        console.log(`📡 Ordenando al ESP32 borrar físicamente el ID: ${id_borrar}`);
+        res.json({ modo: "BORRAR_FISICO", id: id_borrar });
+    } else {
+        res.json({ modo: modo_sensor, id: id_a_enrolar });
+    }
 });
 
-// NUEVA RUTA: Puente para actualizar los textos de la página en tiempo real
 app.post('/api/progreso', (req, res) => {
     const { mensaje } = req.body;
     io.emit('actualizacion_pantalla', mensaje);
@@ -133,8 +147,15 @@ app.delete('/api/eliminar-usuario/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM registros_acceso WHERE huella_id = $1', [id]);
         const resultado = await pool.query('DELETE FROM usuarios WHERE huella_id = $1', [id]);
-        if (resultado.rowCount > 0) res.status(200).json({ mensaje: 'Usuario eliminado' });
-        else res.status(404).json({ error: "Usuario no encontrado" });
+        
+        if (resultado.rowCount > 0) {
+            // Mandamos el ID a la cola para que el ESP32 lo borre físicamente
+            ids_para_eliminar_fisicamente.push(parseInt(id));
+            console.log(`🗑️ ID ${id} eliminado de AWS y en cola para borrado del sensor.`);
+            res.status(200).json({ mensaje: 'Usuario eliminado' });
+        } else {
+            res.status(404).json({ error: "Usuario no encontrado" });
+        }
     } catch (err) { res.status(500).json({ error: "Error interno" }); }
 });
 
